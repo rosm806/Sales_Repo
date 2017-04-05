@@ -1,0 +1,415 @@
+//Laddar data från PassUppföljnings QVD:er
+
+//Skapar en tom tabell att senare fylla med data
+t:
+load '' as dymmyfield AutoGenerate 0;
+
+//Listar Passuppföljnings QVD:er, först för de sista tre månaderna 2015
+call DoDir ('$(vG.PassersLogQVDPath)2.Transform\PassUppföljning_2015-1?.qvd');
+
+if FieldValueCount('FullyQualifiedName') > 0 then
+	for x = 1 to FieldValueCount('FullyQualifiedName') //***************************************************************************
+		let vS.File = FieldValue('FullyQualifiedName',$(x));
+			Concatenate (t) load * from '$(vS.File)' (qvd);
+	next x
+	drop table DoDirFileList;
+	let x = ;
+ELSE
+	exit script;
+ENDIF
+
+//Listar Passuppföljnings QVD:er, nu 2016
+call DoDir ('$(vG.PassersLogQVDPath)2.Transform\PassUppföljning_2016-??.qvd');
+
+if FieldValueCount('FullyQualifiedName') > 0 then
+	for x = 1 to FieldValueCount('FullyQualifiedName') //***************************************************************************
+		let vS.File = FieldValue('FullyQualifiedName',$(x));
+			Concatenate (t) load * from '$(vS.File)' (qvd);
+	next x
+	drop table DoDirFileList;
+	drop field dymmyfield;
+	let x=;
+ELSE
+	exit script;
+ENDIF
+
+t2:
+NoConcatenate load *, rowno() as RadNr Resident t  order by PassKey , NodNr desc;
+drop table t;
+
+store t2 into $(vG.QVDPath)tmpPassuppföljning.qvd (qvd);
+drop table t2;
+******************************************************************************************************************
+
+//****************Laddar data från Resa QVD:er**********************************************************************
+//Skapar en tom tabell att senare fylla med data
+tmpresa:
+load '' as dymmyfield AutoGenerate 0;
+
+//Listar Passuppföljnings QVD:er, först för de sista tre månaderna 2015
+call DoDir ('$(vG.PlutoQVDPath)2.Transform\resa2015_1?.qvd');
+
+for x = 1 to FieldValueCount('FullyQualifiedName') 
+	let vS.File = FieldValue('FullyQualifiedName',$(x));
+		Concatenate (tmpresa) 
+		LOAD distinct
+			 passdag_resa,
+			 text(num(passnr_resa,'00000')&'-'&date(passdag_resa,'YYYY-MM-DD'))& '#' & bestpostnr as %Key,
+		     fran_adress,
+		     till_adress,
+		     [kommun-h] as Kommun_H,
+		     [kommun-l] as Kommun_L
+		from '$(vS.File)' (qvd) where persnr_gruti='KOLLEKTIVTR';
+next x
+drop table DoDirFileList;
+let x = ;
+
+
+
+
+//Listar Passuppföljnings QVD:er, först för de sista tre månaderna 2015
+call DoDir ('$(vG.PlutoQVDPath)2.Transform\resa2016_??.qvd');
+
+for x = 1 to FieldValueCount('FullyQualifiedName') 
+	let vS.File = FieldValue('FullyQualifiedName',$(x));
+		Concatenate (tmpresa) 
+		LOAD distinct
+			 passdag_resa,
+			 text(num(passnr_resa,'00000')&'-'&date(passdag_resa,'YYYY-MM-DD'))& '#' & bestpostnr as %Key,
+		     fran_adress,
+		     till_adress,
+		     [kommun-h] as Kommun_H,
+		     [kommun-l] as Kommun_L
+		from '$(vS.File)' (qvd) where persnr_gruti='KOLLEKTIVTR';
+next x
+drop table DoDirFileList;
+let x = ;
+
+
+Concatenate (tmpresa)
+LOAD distinct
+	 passdag_resa,
+	 text(num(passnr_resa,'00000')&'-'&date(passdag_resa,'YYYY-MM-DD'))& '#' & bestpostnr as %Key,
+     fran_adress,
+     till_adress,
+     [kommun-h] as Kommun_H,
+     [kommun-l] as Kommun_L
+FROM $(vG.PlutoQVDPath)2.Transform\resaCurrent.qvd (qvd) where persnr_gruti='KOLLEKTIVTR';
+
+store tmpresa into $(vG.QVDPath)tmpresa.qvd (qvd);
+drop table tmpresa;
+
+//**********************************************************************************************************************************
+
+tmpAvsn1:
+	LOAD Rnr, 
+	     Nodnr, 
+	     Beskrivning, 
+	     trim(Ant_Minuter) as Ant_Minuter, 
+	     if( len(trim(Ers_minut))=0,0,trim(Ers_minut)) as Ers_minut, 
+	     if(left(upper(trim(Beskrivning)),6)= 'VÄLJER',0.00001,Ersättning) as Ersättning, //******************
+	     left(upper(trim(Beskrivning)),6) as TestField,
+	     Ack, 
+	     EkParam, 
+	     PassNr, 
+	     PassDag, 
+	     PassNr & '-' & PassDag as PassNyckel_tmp, //2015-04-08
+	     num(PassNr,'0000') & '-' & PassDag as PassNyckel, //2015-04-08
+	     LogFile, 
+	     LogFile_Version, //***********************************************************************
+	     If(trim(Ers_minut) >0, 1,0) as Flag_Ersatta_Minuter,
+	     if(right(trim(EkParam),1) <= 4, 'Fast ersättning', 
+	     	if(right(trim(EkParam),1) > 4 , 'Rörlig ersättning',
+	     		if(len(trim(EkParam)) = 0 ,'Ingen Ek.Parameter'))) as Ersättingstyp,
+	     if(upper(Ers_minut) = 'ERS/MIN','Y','N') as Rubrikrad,
+	     'Rörlig' as Ersättningsavsnitt,
+	     PassDag &'-' & num(PassNr,'0000') & '-' & Nodnr as Key //*************************2015-04-08
+	FROM  $(vG.PassersLogQVDPath)2.Transform\PassErsLog_Avsnitt1_T_2015-1?.qvd (qvd);
+	
+Concatenate(tmpAvsn1)
+	LOAD Rnr, 
+	     Nodnr, 
+	     Beskrivning, 
+	     trim(Ant_Minuter) as Ant_Minuter, 
+	     if( len(trim(Ers_minut))=0,0,trim(Ers_minut)) as Ers_minut, 
+	     if(left(upper(trim(Beskrivning)),6)= 'VÄLJER',0.00001,Ersättning) as Ersättning, //******************
+	     left(upper(trim(Beskrivning)),6) as TestField,
+	     Ack, 
+	     EkParam, 
+	     PassNr, 
+	     PassDag, 
+	     PassNr & '-' & PassDag as PassNyckel_tmp, //2015-04-08
+	     num(PassNr,'0000') & '-' & PassDag as PassNyckel, //2015-04-08
+	     LogFile, 
+	     LogFile_Version, //***********************************************************************
+	     If(trim(Ers_minut) >0, 1,0) as Flag_Ersatta_Minuter,
+	     if(right(trim(EkParam),1) <= 4, 'Fast ersättning', 
+	     	if(right(trim(EkParam),1) > 4 , 'Rörlig ersättning',
+	     		if(len(trim(EkParam)) = 0 ,'Ingen Ek.Parameter'))) as Ersättingstyp,
+	     if(upper(Ers_minut) = 'ERS/MIN','Y','N') as Rubrikrad,
+	     'Rörlig' as Ersättningsavsnitt,
+	     PassDag &'-' & num(PassNr,'0000') & '-' & Nodnr as Key //*************************2015-04-08
+	FROM  $(vG.PassersLogQVDPath)2.Transform\PassErsLog_Avsnitt1_T_2016-??.qvd (qvd);
+
+store tmpAvsn1 into $(vG.QVDPath)tmpAvsn1.qvd (qvd);
+drop table tmpAvsn1;
+
+//Skapar mappningstabeller från tmpresa.qvd **************************************************************
+mapresa_fran:
+mapping
+LOAD distinct
+	 %Key,
+     left(fran_adress,22) as fran_adress
+FROM $(vG.QVDPath)tmpresa.qvd (qvd);
+
+
+mapresa_till:
+mapping
+LOAD distinct
+	 %Key,
+     left(till_adress,22) as till_adress
+FROM $(vG.QVDPath)tmpresa.qvd (qvd);
+
+mapKommun_H:
+mapping
+LOAD distinct
+	 %Key,
+     Kommun_H
+FROM $(vG.QVDPath)tmpresa.qvd (qvd);
+
+mapKommun_L:
+mapping
+LOAD distinct
+	 %Key,
+     Kommun_L
+FROM $(vG.QVDPath)tmpresa.qvd (qvd);
+//******************Slut Skapar mappningstabeller från tmpresa**************************************************************************
+
+
+//Skapar mappningstabell från Avsnitt1 "ersatt körtid"************************************************************
+tmpAvsn1:
+	LOAD Rnr, 
+	     Nodnr, 
+	     Beskrivning, 
+	     Ant_Minuter, 
+	     Ers_minut, 
+	     Ersättning, 
+	     TestField,
+	     Ack, 
+	     EkParam, 
+	     PassNr, 
+	     PassDag, 
+	     PassNyckel_tmp, 
+	     PassNyckel, 
+	     LogFile, 
+	     LogFile_Version, 
+	     Flag_Ersatta_Minuter,
+	     Ersättingstyp,
+	     Rubrikrad,
+	     Ersättningsavsnitt,
+	     Key 
+FROM  $(vG.QVDPath)tmpAvsn1.qvd (qvd);
+
+left join (tmpAvsn1)
+LOAD distinct
+	PassNyckel, 
+     max(LogFile_Version) as LogFile_Version,
+     'Y' as MaxLogFileVersion
+resident tmpAvsn1
+group by PassNyckel;
+
+left join (tmpAvsn1)
+LOAD distinct
+	 Beskrivning, 
+     Radie, 
+     Körtid, 
+     Väntetid, 
+     [Ersätter led tid hemma], 
+     [Ersätter ej led tid], 
+     Grundkostnad, 
+     Trappklättrare, 
+     Förskjutning, 
+     Light, 
+     Privat
+FROM
+[$(vG.ConfigPath)Beskrivning_Ersättning.xlsx]
+(ooxml, embedded labels, table is Blad1);
+
+
+Avsn1:
+load
+	PassNyckel_tmp as PassKey,
+	(SubField(trim(Nodnr),'-',1)+1) & '-'  & (SubField(trim(Nodnr),'-',-1)+1) as Resrutt,
+	Sum(Ant_Minuter) as Ant_Minuter
+Resident tmpAvsn1 where Körtid = 1 and Flag_Ersatta_Minuter = 1 and SubStringCount(Nodnr,'-')=1  and MaxLogFileVersion= 'Y' group by PassNyckel_tmp, Nodnr;
+drop table tmpAvsn1;
+
+mapAvsn1:
+mapping
+load
+	PassKey & '#' & Resrutt as Avsnitt1_Key,
+	Ant_Minuter as Ersatt_körtid_Ant_Minuter
+Resident Avsn1;
+drop table Avsn1;
+//*********************Slut avsnitt Skapar mappningstabell från Avsnitt1 "ersatt körtid************************************************
+
+Avsn6:
+load *,
+	  previous(kommun_hämta) as Kommun_Hämta_prev,
+	  previous(från_adress) as Från_adress_prev,
+	  previous(kommun_lämna) as Kommun_Lämna_prev,
+	  previous(till_adress) as  Till_adress_prev,
+	     if([H/L]='H',
+     		kommun_hämta & '#' & left(från_adress,22) & '#' & 
+     			if(previous(PassKey)=PassKey,
+     				//if(previous([H/L])='H',previous(kommun_hämta)& '#' & left(previous(från_adress),22),left(previous(kommun_lämna),22)& '#' & left(previous(till_adress),22)),'n/a hämta'),
+     				if(previous([H/L])='H',previous(kommun_hämta)& '#' & previous(från_adress),previous(kommun_lämna)& '#' & previous(till_adress)),'n/a hämta'),
+     
+     					if([H/L]='L',kommun_lämna & '#' & left(till_adress,2)  & '#' &  
+     						if(previous(PassKey)=PassKey,
+     							//if(previous([H/L])='L',previous(kommun_lämna)& '#' & left(previous(till_adress),22),left(previous(kommun_hämta),22)& '#' & left(previous(från_adress),22)),'n/a'))) as Resa_adresser;
+     							if(previous([H/L])='L',previous(kommun_lämna)& '#' & previous(till_adress),previous(kommun_hämta)& '#' & previous(från_adress)),'n/a'))) as Resa_adresser;
+
+load *,
+     Previous(från_adress) as från_adress_prev,
+     Previous(till_adress) as till_adress_prev,
+     Previous(kommun_hämta) as kommun_hämta_prev,
+     Previous(kommun_lämna) as kommun_lämna_prev 
+     where från_adress<>'n/a' or till_adress<>'n/a' or kommun_hämta<>'n/a' or kommun_lämna<>'n/a';
+LOAD 
+	RadNr, 
+     [H/L], 
+     previous([H/L]) as [H/L prev], 
+     Ktid_nod,  
+     LogFile,  
+     NodNr, 
+     PassDag, 
+     BestPost, 
+     PassKey, 
+     PassNr,  
+     PassTid, 
+     time(maketime(Hour(PassTid),minute(PassTid)),'hh:mm:ss') as PassTid_Short,
+     Resrutt,
+     PassKey& '#' & BestPost as %Key,
+     applymap('mapresa_fran',PassKey& '#' & BestPost,'n/a') as från_adress,
+     applymap('mapresa_till',PassKey& '#' & BestPost,'n/a') as till_adress,
+     applymap('mapKommun_H',PassKey& '#' & BestPost,'n/a') as kommun_hämta,
+     applymap('mapKommun_L',PassKey& '#' & BestPost,'n/a') as kommun_lämna,
+     ApplyMap('mapAvsn1', PassKey & '#' & Resrutt, 0) as Ersatt_körtid_Ant_Minuter
+FROM $(vG.QVDPath)tmpPassUppföljning.qvd (qvd);
+
+
+Store Avsn6 into $(vG.QVDPath)tmpAvsn6.qvd (qvd);
+drop Table Avsn6;
+
+//****************************************************************************************
+t:
+LOAD RadNr, 
+     [H/L], 
+     [H/L prev], 
+     Ktid_nod, 
+     NodNr, 
+     PassDag, 
+     BestPost, 
+     PassKey, 
+     PassNr, 
+     PassTid, 
+     PassTid_Short,
+     PassTid_Short as Starttid, 
+     num(PassTid_Short) as PassTid_Num,
+     Resrutt, 
+     %Key, 
+     från_adress, 
+     till_adress, 
+     kommun_hämta, 
+     kommun_lämna, 
+     Ersatt_körtid_Ant_Minuter, 
+     från_adress_prev, 
+     till_adress_prev, 
+     kommun_hämta_prev, 
+     kommun_lämna_prev, 
+     Kommun_Hämta_prev, 
+     Från_adress_prev, 
+     Kommun_Lämna_prev, 
+     Till_adress_prev, 
+     Resa_adresser,
+     Resa_adresser & '#' & PassTid_Short as Resa_adreser_Key
+FROM $(vG.QVDPath)tmpAvsn6.qvd (qvd);
+
+call OpenExcel('$(vG.SharedConfigPath)Matchningstabelll QV Anropsstyrdalinjeturer 160619-161210.xlsx');
+
+left join (t)
+LOAD distinct
+	upper(FrånKomPlanet&'#'&left(FrånLägePlanet,22)&'#'&TillKomPlanet&'#'&left(TillLägePlanet,22)) as Resa_adresser,
+	//ServiceJourneyGid,
+	 //Starttid,
+	 if(Starttid>Sluttid,
+	 	Interval(1+ Sluttid-Starttid,'mm'),
+	 		Interval(Sluttid-Starttid,'mm')) as Planrestid_LägeLäge 
+FROM
+$(vG.SharedConfigPath)Matchningstabelll QV Anropsstyrdalinjeturer 160619-161210.xlsx (ooxml, embedded labels, table is $(vL.FirstSheetname));
+
+//*****************
+left join (t)
+LOAD distinct
+     upper(FrånKomPlanet&'#'&left(FrånHplPlanet,22)&'#'&TillKomPlanet&'#'&left(TillHplPlanet,22)) as Resa_adresser,
+     //Starttid,
+	 if(Starttid>Sluttid,
+	 	Interval(1+ Sluttid-Starttid,'mm'),
+	 		Interval(Sluttid-Starttid,'mm')) as Planrestid_HplHpl
+FROM
+$(vG.SharedConfigPath)Matchningstabelll QV Anropsstyrdalinjeturer 160619-161210.xlsx (ooxml, embedded labels, table is $(vL.FirstSheetname));
+
+left join (t)
+LOAD distinct
+     Upper(FrånKomPlanet&'#'&left(FrånHplPlanet,22)&'#'&TillKomPlanet&'#'&left(TillLägePlanet,22)) as Resa_adresser,
+	 //Starttid,
+	 if(Starttid>Sluttid,
+	 	Interval(1+ Sluttid-Starttid,'mm'),
+	 		Interval(Sluttid-Starttid,'mm')) as Planrestid_HplLäge
+FROM
+$(vG.SharedConfigPath)Matchningstabelll QV Anropsstyrdalinjeturer 160619-161210.xlsx (ooxml, embedded labels, table is $(vL.FirstSheetname));
+
+left join (t)
+LOAD distinct
+     (FrånKomPlanet&'#'&left(FrånLägePlanet,22)&'#'&TillKomPlanet&'#'&left(TillHplPlanet,22)) as Resa_adresser,
+     //Starttid,
+	 if(Starttid>Sluttid,
+	 	Interval(1+ Sluttid-Starttid,'mm'),
+	 		Interval(Sluttid-Starttid,'mm')) as Planrestid_LägeHpl
+FROM
+$(vG.SharedConfigPath)Matchningstabelll QV Anropsstyrdalinjeturer 160619-161210.xlsx (ooxml, embedded labels, table is $(vL.FirstSheetname));
+
+
+//************************************************************************************************
+t2:
+NoConcatenate load * where isMatched = 1 and TimeTableMatch =1;
+	
+load *,
+	num#(Planrestid_LägeLäge) - num(Ersatt_körtid_Ant_Minuter) as Restid_Avvikelse,
+	if(num#(Planrestid_LägeLäge) - num(Ersatt_körtid_Ant_Minuter) <>0,1) as Avvikelse_Count,
+	if(
+		if(isnull(Planrestid_HplHpl),0,Planrestid_HplHpl) 
+			+ if(isnull(Planrestid_HplLäge),0,Planrestid_HplLäge) 
+				+ if(isnull(Planrestid_LägeHpl),0,Planrestid_LägeHpl) 
+					+ if(isnull(Planrestid_LägeLäge),0,Planrestid_LägeLäge) >0 ,1,0) as isMatched,
+	Resa_adresser & ' ' & time(Starttid,'hh:mm') as Resa_adresser_unik,
+
+	if(if(num(Starttid) >= (hour(PassTid_Short)/24) + (minute(PassTid_Short)/60/24)- (10/60/24),1,0)
+		+
+			if(num(Starttid) <= (hour(PassTid_Short)/24) + (minute(PassTid_Short)/60/24)+ (10/60/24),1,0)=2,1,0) as TimeTableMatch
+resident t;
+drop table t;
+
+store t2 into $(vG.QVDPath)t2.qvd (qvd);
+
+left  join(t2)
+load
+	%Key,
+	min(fabs(Restid_Avvikelse)) as Restid_Avvikelse,
+	1 as Min_RestidAvvikelse
+resident t2 group by %Key;
+
+//Final:
+//NoConcatenate load * resident t2 Where Min_RestidAvvikelse=1 and isMatched=1 and TimeTableMatch=1;
+//drop table t2;
