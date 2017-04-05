@@ -1,0 +1,437 @@
+﻿
+///$tab Resa
+ResaInclAttr:
+LOAD PassNyckel, 
+     adressnothamta, 
+     adressnotlamna, 
+     andrat, 
+     ant_medres, 
+     antal_person, 
+     Antal_Resa, 
+     anvid, 
+     bestdat, 
+     bestkl, 
+     bestonskdat, 
+     bestonskkl, 
+     bestoperid, 
+     bestpostnr, 
+     bestref, 
+     bestriktnr, 
+     bestsatt, 
+     bestsenfrkl, 
+     besttelnr, 
+     betalare, 
+     betalare_ID, 
+     betalare_kat, 
+     [bostomr-res], 
+     dagtyp, 
+     Definitiv, 
+     dikortid, 
+     efterrap, 
+     egenavgift, 
+     extra, 
+     fakturataxa, 
+     fordel_kost, 
+     fordel_kost_indexerad, 
+     fordtypkrav, 
+     forsenad, 
+     fran_adress, 
+     fran_omrade, 
+     har_ftj, 
+     hkoordinatx, 
+     hkoordinaty, 
+     hplanetort, 
+     IndexFaktor, 
+     kkod, 
+     kollektivfraga, 
+     kollektivresa, 
+     [kommun-h], 
+     [kommun-l], 
+     kontraorder, 
+     koststal, 
+     Kvartal_Resa, 
+     lkod, 
+     lkoordinatx, 
+     lkoordinaty, 
+     lov_startdat, 
+     lov_starttid, 
+     lplanetort, 
+     maxspilltid, 
+     maxvtid, 
+     medresegenavg, 
+     Månad_Resa, 
+     namn, 
+     nodlopnrh, 
+     nodlopnrl, 
+     nodnr, 
+     [nodnr-h], 
+     notdatum, 
+     nottid, 
+     nyckelkod, 
+     operator_resa, 
+     upper(orsakskod) as orsakskod, 
+     upper(bomkod) as Bomkod, //Nytt fält 2014-08-26
+     if(SubStringCount(upper(orsakskod) & upper(bomkod),'TAXI')>0, 'TAXI',
+		if(len(bomkod)=0,orsakskod ,bomkod)) as Orsakskod_Concat, //Nytt fält 2014-08-26
+     passdag_resa, 
+     year(passdag_resa) & '-' & num(month(passdag_resa),'00') as ReseMånad,
+     passnr_resa, 
+     persnr_gruti, 
+     [plan-typ], 
+     plantidhamtanod, 
+     Plantypbeskrivning, 
+     resklass1, 
+     reslangd, 
+     [restid-s], 
+     restyp, 
+     samaksparr, 
+     serviceniva, 
+     sjukhusadrh, 
+     sjukhusadrl, 
+     sluttid, 
+     specford, 
+     spilltid, 
+     till_adress, 
+     till_omrade, 
+     tillgangkost, 
+     timma, 
+     [tomtid-ejhem], 
+     [tomtid-hem], 
+     [trpkl-h], 
+     [trpkl-l], 
+     [upphtid-h], 
+     [upphtid-l], 
+     ursbestoperid, 
+     vantetid, 
+     Vecka_Resa, 
+     Veckodag_Resa, 
+     viaadresser, 
+     År_Resa, 
+     ÅrMånad_Resa, 
+     trafiktillst, 
+     PassNyckelTrTill, 
+     Försening_count, 
+     Försening_count_30,
+     Försening_Minuter,
+     Bomresa, 
+     akeri, 
+	 statistikgr as Statistikgrupp,  //RSH 20160424
+	 fordonsgrupp,	      //RSH 20160424
+	 bomtext,   //RSH 20160424
+     TillstId,
+     Trafikföretag,
+     Resa_Synpunkt_nyckel,               // 	passnr_resa & '-' & persnr_gruti & '-' & passdag_resa as Resa_Synpunkt_nyckel
+     Resa_Synpunkt_nyckel as Resa.Resa_Synpunkt_nyckel,
+     Central,
+     date(makedate(left(lov_startdat,4),mid(lov_startdat,6,2),right(lov_startdat,2)) 
+		+ maketime(left(lov_starttid,len(lov_starttid)-2),right(lov_starttid,2)),'YYYY-MM-DD hh:mm') as Resa_Timestamp
+FROM $(vG.PlutoQVD_TPath)ResaInclAttr.qvd (qvd);
+
+Intervall:
+LOAD timma, 
+     Dygnsintervall
+FROM $(vG.PlutoConfigPath)Dygnsintervall.xlsx (ooxml, embedded labels, table is Blad1);
+
+
+DP:
+LOAD tmpField, 
+     TillstId,
+     PassKomb, 
+     subfield(PassKomb,'-',1) as PassKomb_C1,
+     subfield(PassKomb,'-',-1) as PassKomb_C2,
+     date(Start_C1,'YYYY-MM-DD hh:mm') as Start_C1, 
+     date(Slut_C1,'YYYY-MM-DD hh:mm') as Slut_C1,
+     date(Start_C2,'YYYY-MM-DD hh:mm') as Start_C2, 
+     date(Slut_C2,'YYYY-MM-DD hh:mm') as Slut_C2, 
+     Datum, 
+     date(OverLapTime * -1,'YYYY-MM-DD hh:mm') as OverLapTime,
+     $(vL.Transform_DP_Flag) as DP_Count
+     //if(OverLapTime * -1000000 >= 20835,1) as DP_Count
+FROM $(vG.PlutoQVD_TPath)DubblaPass*.QVD (qvd);
+
+///$tab Synpunkter
+mapResa_Synpunkt_nyckel:
+mapping 
+load Distinct
+	Resa_Synpunkt_nyckel,
+	1 as Exist_Resa_Synpunkt_nyckel
+FROM $(vG.PlutoQVD_TPath)ResaInclAttr.qvd (qvd);
+
+
+KategoriTrafik:
+LOAD Kategorier_Nivå1, 
+     Kategorier_Nivå2, 
+     Kategorier_Nivå3, 
+     Kategorier_Nivå4, 
+     LocationGuid,
+     LocationGuid as LocationGuidTrafik, 
+     ParentLocationGuid, 
+     Kategorier_Name, 
+     Kategorier_ShortName, 
+     Kategorier_Description
+FROM $(vL.KäsQVDPath)Kategorier.qvd (qvd) 
+Where $(vL.Condition_KategoriTrafik);
+//(Kategorier_Nivå1 = 'Trafik' and Kategorier_Description = 'AT')                                                                             
+//or (Kategorier_Nivå1 = 'Trafik' and Kategorier_Nivå2 = 'Områdestrafik' and Kategorier_Nivå3 <> 'Närbuss')
+//or (Kategorier_Nivå1 = 'Trafik' and Kategorier_Nivå2 = 'Beställningscentraler')
+//or (Kategorier_Nivå1 = 'Trafik' and Kategorier_Nivå2 = 'Körde förbi hållplats')
+//;
+
+KategoriOmrådesTrafik:
+LOAD Kategorier_Nivå1 as Nivå1Områdestrafik, 
+     Kategorier_Nivå2 as Nivå2Områdestrafik, 
+     Kategorier_Nivå3 as Nivå3Områdestrafik, 
+     Kategorier_Nivå4 as Nivå4Områdestrafik, 
+     LocationGuid,
+     LocationGuidTrafik as LocationGuidOmrådestrafik, 
+     ParentLocationGuid as ParentLocationGuidOmrådestrafik, 
+     Kategorier_Name as Kategorier_NameOmrådestrafik, 
+     Kategorier_ShortName as Kategorier_ShortNameOmrådestrafik, 
+     Kategorier_Description as Kategorier_DescriptionOmrådestrafik
+Resident KategoriTrafik
+where $(vL.Condition_KategoriOmrådesTrafik);
+//Where (Kategorier_Nivå1 = 'Trafik' and Kategorier_Nivå2 = 'Områdestrafik' and Kategorier_Nivå3 <> 'Närbuss');
+
+
+ 
+KategoriBC:
+LOAD Kategorier_Nivå1 as Nivå1BC, 
+     Kategorier_Nivå2 as Nivå2BC, 
+     Kategorier_Nivå3 as Nivå3BC, 
+     Kategorier_Nivå4 as Nivå4BC, 
+     LocationGuid,
+     LocationGuid as LocationGuidBC,
+     ParentLocationGuid as ParentLocationGuidBC, 
+     Kategorier_Name as Kategorier_NameBC, 
+     Kategorier_ShortName as Kategorier_ShortNameBC, 
+     Kategorier_Description as Kategorier_DescriptionBC
+FROM
+$(vL.KäsQVDPath)Kategorier.qvd (qvd) 
+Where $(vL.Condition_KategoriBC);
+//Kategorier_Nivå1 = 'BC';
+
+map_Kategori:  // används för att mappa TrafikföretagRelÄrende  2016-08-31
+Mapping LOAD
+     LocationGuid,
+     1 as xx
+FROM
+$(vL.KäsQVDPath)Kategorier.qvd (qvd) 
+Where $(vL.Condition_MapKategori);
+/*
+ // (Kategorier_Nivå1 = 'BC' or 
+(Kategorier_Nivå1 = 'Trafik' and Kategorier_Description = 'AT')                                                                             
+or (Kategorier_Nivå1 = 'Trafik' and Kategorier_Nivå2 = 'Områdestrafik' and Kategorier_Nivå3 <> 'Närbuss')
+or (Kategorier_Nivå1 = 'Trafik' and Kategorier_Nivå2 = 'Körde förbi hållplats');
+//or (Kategorier_Nivå1 = 'BC'
+//and Kategorier_Nivå2 <> 'Regelverk'
+//and LocationGuid <> '{7D3CB176-A606-4134-B491-1EB34F8E1F5A}'       // Omplanerad resa = 488;
+//and Kategorier_Nivå2 <> 'Beställning'
+//and Kategorier_Nivå2 <> 'Fel egenavgift'
+//and Kategorier_Nivå2 <> 'Information'
+//and Kategorier_Nivå2 <> 'Kundtjänst'
+//and Kategorier_Nivå2 <> 'Kvittobegäran'
+//and Kategorier_Nivå2 <> 'Tillstånd');
+*/
+//**************************************************************************************
+Synpunkter:
+NoConcatenate load * where $(vL.Condition_Synpunkter2);//Exist_Giltig_Kategori =1;
+LOAD 
+	   $(vL.Transform_Resa_Synpunkt_nyckel) as Resa_Synpunkt_nyckel,
+//	   Passnr & '-' & mid(Personnummer,3,6) & '-' & right(Personnummer,4) & '-' & Händelse_Datum as Synpunkter.Resa_Synpunkt_nyckel,
+	   1 as Synpunkter_Counter,
+	   applymap('mapResa_Synpunkt_nyckel',Passnr & '-' & mid(Personnummer,3,6) & '-' & right(Personnummer,4) & '-' & Händelse_Datum,'n/a') as Exist_Resa_Synpunkt_nyckel,
+	   ApplyMap('map_Kategori', LocationGuid, 'n/a') as Exist_Giltig_Kategori,
+//	   Passnr,   
+//	   ÄrendeID, 
+//     SynpunktsID, 
+//     ObjectID, 
+//     SeqNo_ECases, 
+//     Registrering_Datum, 
+//     Registrering_Tid, 
+//     Avslutat_Datum, 
+//     Avslutat_Tid, 
+//     IncomingMediaTypeGuid, 
+//     HideFromInbox, 
+//     IsCaseContainer, 
+//     RequiresSupplement, 
+//     SupplementText, 
+//     Händelse_Datum, 
+//     RapportOcurredDateDate, 
+//     Händelse_Tid, 
+//     RapportOcurredDateTime, 
+//     Kund_besvarad, 
+//     AnswerTypeGuid, 
+//     BinaryID, 
+//     BasedOnObjectID, 
+//     ObjectModuleGuid, 
+//     ObjectTypeGuid, 
+//     InboxGuid, 
+//     PreviousInboxGuid, 
+//     Ärendenr_Identifier, 
+//     Ärendenr, 
+//     RapportFeedID, 
+     Händelse, 
+//     Beskrivning, 
+//     RapportSynpunkt, 
+//     Koordinater, 
+//     Prioritet, 
+//     DiaryGuid, 
+//     Status, 
+//     Inkommet_Datum, 
+//     Inkommet_Tid, 
+//     SkapadAv_ID, 
+//     SkapadAv_Namn, 
+//     ModifiedDate_Object, 
+//     ÄndradAv_ID, 
+//     ÄndradAv_Namn, 
+//     LockedDate_Object, 
+//     LåstAv_ID, 
+//     LåstAv_Namn, 
+     SystemStatus, 
+//     EServicePluginGuid, 
+//     SessionID, 
+//     EServiceStatusName, 
+//     Handläggare, 
+//     HasNotes, 
+//     HasChildObjects, 
+//     HasCoverage, 
+//     HasLock, 
+//     HasDocuments, 
+//     HasReferral, 
+//     HasReferralAnswer, 
+//     IsDraft, 
+//     IsPul, 
+//     IsConfidential, 
+//     ServiceLevelAgreementStartDate, 
+//     IsAnonymous, 
+     LocationGuid, 
+     DiaryPlanItemGuid, 
+//     Planerad_Ankomst_Datum, 
+//     Planerad_Ankomst_Tid, 
+//     [Tekniskt Linjenummer], 
+//     RapportintLineNumber, 
+//     Linjenamn, 
+//     [Planerad AnkomstDatumTid], 
+//     Hållplats_Ankomst, 
+//     RapportRiktningmot, 
+//     TDB_BrokenLegDirectonOfLineGid, 
+     Händelsekommun, 
+//     [Vald Hållplats], 
+     Områdestrafik, 
+     Områdestrafiktyp,
+//     Linjesträckning, 
+//     [Valt Hållplatsläge], 
+//     [Försening i minuter], 
+//     Linje, 
+//     Hållplats_Avresa, 
+//     RapportHållplats, 
+//     Trafikslag, 
+//     Planerad_Avresa_Datum, 
+//     Planerad_Avresa_Tid, 
+//     TDB_BrokenLegDepartureStopAreaGid, 
+     Resetyp, 
+//     TrafikföretagID, 
+//     ÅtgärdID, 
+//     [Åtgärd Utförd], 
+//     Trafiktillstånd, 
+//     [Bokning Utförd Av], 
+//     IncidenttypID, 
+//     Passnr, 
+//     Trafikföretag, 
+//     Betalningstyp, 
+//     FaktiskAvresa_Datum, 
+//     FaktiskAnkomst_Tid, 
+//     FaktiskAnkomst_Datum, 
+//     FaktiskAvresa_Tid, 
+//     FaktiskAnkomst_Hållplats, 
+//     [Verklig Avresa], 
+//     FaktiskAvresa_Hållplats, 
+//     VT_DocumentDocumentDebBC, 
+//     Beslutstyp2, 
+//     Beslutsbelopp, 
+     Beslutstyp, 
+//     Beslutat_Ärende, 
+//     Beslutat_Ärendenr, 
+//     VT_DocumentDocumentDistance, 
+//     VT_DocumentDocumentReceiptAmount, 
+//     VT_DocumentDocumentRejectionSectionGuid, 
+     Gatuadress, 
+//     Address2, 
+//     Address3, 
+//     Kontonummer, 
+//     Clearingnummer, 
+//     BankName, 
+//     BGNumber, 
+     Postort, 
+//     Företag, 
+//     CounterPartNumber, 
+//     Land, 
+//     EMail, 
+     Förnamn & ' ' & Efternamn as Synpunkter.Personnamn,
+//     Hemtelefon, 
+//     Efternamn, 
+//     Mobiltelefon, 
+//     Organisationsnummer, 
+//     PGNumber, 
+//     Personnummer, 
+//     Arbetstelefon, 
+//     Postnummer, 
+//     Ärenden_Händelse_ObjectID, 
+//     Ärenden_Händelse_Datum, 
+//     Ärenden_Händelse_Tid, 
+//     Ärenden_Händelse_Avslutat_Datum, 
+//     KanVisasIQV, 
+//     KanVisasIQV_Värde, 
+//     Källa, 
+//     HiddenOcurredDate, 
+//     HiddenRegistrationDate, 
+//     RapportHållplatsRiktningmot, 
+//     RapportFeedIDOcurredDate, 
+//     Registrering_Datum_Format, 
+//     Händelse_Datum_Format
+	   Trafikavtal
+//FROM [D:\QvDocuments\Kvalitetsuppföljning\qvd\derive\Ärenden.qvd] (qvd)
+FROM $(vL.KäsQVDPath)Ärenden_201?.qvd (qvd)
+ Where $(vL.Condition_Synpunkter);
+//SystemStatus = 0 
+//and ((Exists(LocationGuidTrafik,LocationGuid) and ((Områdestrafik = 'True' and Områdestrafiktyp <> 'Närbuss') OR Trafikavtal= '8300' OR Trafikavtal= '8600'))
+//or Exists(LocationGuidBC,LocationGuid));
+
+//drop Tables KategoriBC, KategoriTrafik;
+
+Ärendetyper:
+LOAD //DiaryPlanGuid, 
+     Ärendetyp1, 
+     Ärendetyp2, 
+     DiaryPlanItemGuid, 
+//     ParentDiaryPlanItemGuid, 
+     Ärendetyp, 
+//     SmsSurveyGuid, 
+     DiaryPlanItemLevel, 
+     Ärendetyp_ShortName, 
+     Ärendetyp_Desc//, 
+//     DefaultCaseName, 
+//     DiaryPlan
+FROM
+$(vL.KäsQVDPath)Ärendetyper.qvd (qvd)
+where $(vL.Condition_Arendetyper);//Ärendetyp <> 'Resvägs- och Prisfråga';
+
+QUALIFY *;
+UNQUALIFY PassNyckel;
+
+Transportörsavvikelser:
+LOAD [Ärende-ID], 
+     Trafikföretag, 
+     Avvikelse, 
+     Händelsedatum, 
+     Passnummer & num(Händelsedatum) as PassNyckel, 
+     Trafiktillstånd, 
+     Meddelande, 
+     [Ev. fordonsgrupp], 
+     Språksvårighet, 
+     [Resenärs lovade hämtatid], 
+     [Bristande Larmhantering]
+FROM
+[$(vL.PlanetUppfoljning)Transportörsavvikelser.xlsx] (ooxml, embedded labels, table is owssvr) ;
+
+UNQUALIFY *;
